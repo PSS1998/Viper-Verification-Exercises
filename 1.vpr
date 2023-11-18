@@ -1,0 +1,151 @@
+// Viper Code for Circular Buffer and Linked List
+
+field cb_contents: Ref
+field head: Int
+field tail: Int
+
+// Array API (Provided)
+predicate array(self: Ref)
+function array_len(self: Ref): Int
+    requires array(self)
+function array_read(self: Ref, idx: Int): Int
+    requires array(self)
+    requires 0 <= idx && idx < array_len(self)
+method array_write(self: Ref, idx: Int, val: Int)
+    requires array(self)
+    requires 0 <= idx && idx < array_len(self)
+    ensures array(self)
+    ensures array_len(self) == old(array_len(self))
+    ensures forall i: Int :: {array_read(self, i)} 0 <= i && i < array_len(self) && i != idx ==>
+        array_read(self, i) == old(array_read(self, i))
+    ensures array_read(self, idx) == val
+
+// Part 1: Circular Buffer Predicate
+predicate cb(buf: Ref)
+{
+    acc(buf.head) && acc(buf.tail) && acc(buf.cb_contents) && array(buf.cb_contents) && array(buf.cb_contents) && 0 <= buf.head && buf.head < array_len(buf.cb_contents) && 0 <= buf.tail && buf.tail < array_len(buf.cb_contents)
+}
+
+function content(buf: Ref, idx: Int, head_temp: Int): Seq[Int] 
+    requires array(buf)
+    requires idx >= 0
+    requires idx < array_len(buf)
+{
+    idx == head_temp ? Seq[Int]() :
+    ( Seq(array_read(buf, idx)) ++ content(buf, ((idx + 1) % array_len(buf)), head_temp) )
+}
+
+function reverse_content(buf: Ref, idx: Int, head_temp: Int): Seq[Int] 
+    requires array(buf)
+    requires idx >= 0
+    requires idx < array_len(buf)
+{
+    idx == head_temp ? Seq[Int]() :
+    ( content(buf, ((idx + 1) % array_len(buf)), head_temp) ++ Seq(array_read(buf, idx)) )
+}
+
+function cb_empty(buf: Ref): Bool 
+    requires cb(buf)
+{
+    unfolding cb(buf) in buf.tail != buf.head ? false : true
+}
+
+function cb_has_room(buf: Ref): Bool 
+    requires cb(buf)
+{
+    unfolding cb(buf) in (buf.tail + 1) % array_len(buf.cb_contents) == buf.head ? false : true
+}
+
+function cb_length(buf: Ref): Int
+    requires cb(buf)
+{
+    unfolding cb(buf) in (buf.tail - buf.head) % array_len(buf.cb_contents)
+}
+
+function is_val_written_in_buffer(buf: Ref, value: Int): Bool
+    requires cb(buf)
+{
+    unfolding cb(buf) in (array_read(buf.cb_contents, ((buf.tail-1) < 0) ? (buf.tail-1) + array_len(buf.cb_contents) : (buf.tail-1)) == value) ? true : false
+}
+
+// Part 2.1: Read Method
+method cb_read(buf: Ref) returns (res: Int)
+    requires cb(buf)
+    requires !cb_empty(buf)
+    ensures cb(buf)
+    ensures cb_length(buf) == old(cb_length(buf)) - 1
+{
+    unfold cb(buf)
+    res := array_read(buf.cb_contents, buf.head)
+    buf.head := (buf.head + 1) % array_len(buf.cb_contents)
+    fold cb(buf)
+}
+
+// Part 2.2: Write Method
+method cb_write(buf: Ref, val: Int)
+    requires cb(buf)
+    requires cb_has_room(buf)
+    ensures cb(buf)
+    ensures cb_length(buf) == old(cb_length(buf)) + 1
+    ensures is_val_written_in_buffer(buf, val) == true
+{
+    unfold cb(buf)
+    array_write(buf.cb_contents, buf.tail, val)
+    buf.tail := (buf.tail + 1) % array_len(buf.cb_contents)
+    fold cb(buf)
+}
+
+field next: Ref
+field elem: Int
+
+// Part 3: Linked List
+predicate list(this: Ref) {
+    acc(this.elem) && acc(this.next) && 
+    (this.next != null ==> list(this.next))
+}
+
+method create_list() returns (res: Ref)
+    ensures  list(res)
+{
+    res := new(*)
+    res.next := null
+    fold list(res)
+}
+
+method prepend_list(this: Ref, e: Int) returns (res: Ref)
+    requires list(this)
+    ensures  list(res)
+{
+    res := new(*)
+    res.elem := e
+    res.next := this
+    fold list(res)
+}
+
+function get_content(buf: Ref): Seq[Int]
+    requires cb(buf)
+{
+    unfolding cb(buf) in content(buf.cb_contents, buf.head, buf.head)
+}
+
+function get_reverse_content(buf: Ref): Seq[Int]
+    requires cb(buf)
+{
+    unfolding cb(buf) in reverse_content(buf.cb_contents, buf.head, buf.head)
+}
+
+// Part 4: Method to reverse Circular Buffer
+method cb_reverse(buf: Ref)
+    requires cb(buf)
+    ensures cb(buf)
+    ensures get_content(buf) == old(get_reverse_content(buf))
+{
+    var e: Int
+    var linked_list: Ref
+    linked_list := create_list()
+    if (!cb_empty(buf)) {
+        e := cb_read(buf)
+        linked_list := prepend_list(linked_list, e)
+        cb_reverse(buf)
+    }
+}
