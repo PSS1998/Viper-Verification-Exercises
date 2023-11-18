@@ -122,6 +122,15 @@ method prepend_list(this: Ref, e: Int) returns (res: Ref)
     fold list(res)
 }
 
+method head_list(this: Ref) returns (res: Int)
+  requires list(this)
+  ensures  list(this)
+{
+    unfold list(this)
+    res := this.elem
+    fold list(this)
+}
+
 function get_content(buf: Ref): Seq[Int]
     requires cb(buf)
 {
@@ -146,6 +155,27 @@ method cb_reverse(buf: Ref)
     if (!cb_empty(buf)) {
         e := cb_read(buf)
         linked_list := prepend_list(linked_list, e)
-        cb_reverse(buf)
     }
+    if (cb_has_room(buf)) {
+        write_to_buffer_from_list(buf, linked_list)
+    }
+}
+
+method write_to_buffer_from_list(buf: Ref, linked_list: Ref)
+    requires cb(buf)
+    requires list(linked_list)
+    requires cb_has_room(buf)
+    ensures cb(buf)
+    ensures list(linked_list)
+{
+    var e: Int
+    e := head_list(linked_list)
+    cb_write(buf, e)
+    unfold list(linked_list)
+    if (cb_has_room(buf)) {
+        if (linked_list.next != null) {
+            write_to_buffer_from_list(buf, linked_list.next)
+        }
+    }
+    fold list(linked_list)
 }
