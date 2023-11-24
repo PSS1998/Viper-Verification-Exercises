@@ -85,7 +85,7 @@ method lemma_pow(b: Int, y: Int)
 
 method lemma_log_decrease(y: Int)
     requires y > 0
-    ensures log((y / 2) + 1) <= log(y + 1) - 1
+    ensures log(y / 2) == log(y) - 1
 
 // Add time credit annotations to the following method.
 //
@@ -98,7 +98,7 @@ method lemma_log_decrease(y: Int)
 method fast_pow(n: Int, e: Int)
     returns (res: Int)
     requires 0 < e
-    requires acc(time_credit(), (log(e+1)+1)/1)
+    requires acc(time_credit(), (log(e)+2)/1)
     ensures res == math_pow(n, e)
 {
     consume_time_credit()
@@ -109,12 +109,19 @@ method fast_pow(n: Int, e: Int)
     res := 1
     b := n
     y := e
+
+    var i: Int
+    i := 0
     while (y > 0)
         invariant 0 <= y
         invariant res * math_pow(b, y) == math_pow(n, e)
-        invariant acc(time_credit(), (log(y+1))/1)
+        invariant (y > 0) ==> acc(time_credit(), (log(y)+1)/1)
+        // invariant i <= log(e+1)
+        // invariant log(e+1) - i == log(y+1)
+        // invariant acc(time_credit(), (log(e+1)-i)/1)
     {
         consume_time_credit()
+        i := i+1
         if (y % 2 == 1) {
             lemma_pow(b, y - 1)
             res := res * b
