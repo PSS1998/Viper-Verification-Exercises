@@ -1,0 +1,121 @@
+predicate time_credit()
+method consume_time_credit()
+    requires time_credit()
+
+// PART 1: Binary search tree predicate
+//
+// Define a predicate for a binary search tree. You may define new fields and
+// additional predicates. You may add arguments or heap-based functions for
+// abstraction.
+// predicate bst(...) {
+//     ...
+// }
+
+field left: Ref
+field right: Ref
+field value: Int
+field min: Int
+field max: Int
+
+function maxVal(this: Ref): Int 
+    requires bst(this)
+{
+    unfolding bst(this) in this.right == null ? this.value : maxVal(this.right)
+}
+
+
+function minVal(this: Ref): Int 
+    requires bst(this)
+{
+    unfolding bst(this) in this.left == null ? this.value : minVal(this.left)
+}
+
+predicate bst(this: Ref) {
+    acc(this.left) && acc(this.right) && acc(this.value) && acc(this.max) && acc(this.min) &&
+    (this.right != null ==> bst(this.right) && this.max == (maxVal(this.right))) && 
+    (this.left != null ==> bst(this.left) && this.min == (minVal(this.left))) &&
+    (this.right == null ==> this.max == this.value) &&
+    (this.left == null ==> this.min == this.value)
+
+}
+
+// define optHeight(t) (
+//     t == null ? 0 : 1 + depth(t)
+// )
+
+// define max(a,b) (
+//     (a > b ? a : b)
+// )
+
+// function depth(this: Ref): Int
+//     requires this != null ==> bst(this)
+// {
+//     this == null ? -1 : 
+//     (unfolding bst(this) in max(optHeight(this.left), optHeight(this.right)))
+// }
+
+// PART 2: BST insertion method
+//
+// Use the bst predicate you defined to implement a method which inserts a
+// value into the given tree.
+method bst_insert(tree: Ref, val: Int)
+    requires bst(tree)
+    ensures bst(tree)
+{
+    unfold bst(tree)
+    
+    if (tree == null){
+        tree.value := val
+        tree.max := val
+        tree.min := val
+    }
+    else{
+        if (val > tree.value){
+            if (tree.right != null){
+                bst_insert(tree.right, val)
+                tree.max := maxVal(tree.right)
+            }
+            else{
+                var new_tree : Ref := new(*)
+                new_tree.value := val
+                new_tree.left := null
+                new_tree.right := null
+                new_tree.min := val
+                new_tree.max := val
+
+                fold bst(new_tree)
+
+                tree.right := new_tree
+                tree.max := val
+            }
+        }
+        else{
+            if (tree.left != null){
+                bst_insert(tree.left, val)
+                tree.min := minVal(tree.left)
+            }
+            else{
+                var new_tree : Ref := new(*)
+                new_tree.value := val
+                new_tree.left := null
+                new_tree.right := null
+                new_tree.min := val
+                new_tree.max := val
+
+                fold bst(new_tree)
+
+                tree.left := new_tree
+                tree.min := val
+            }
+        }
+    }
+
+    fold bst(tree)
+
+}
+
+
+// PART 3: Logarithmic runtime upper bound
+//
+// Prove that `bst_insert` terminates within `h + 1` time units, where `h` is
+// the height of the tree.
