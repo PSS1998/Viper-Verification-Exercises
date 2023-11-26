@@ -39,20 +39,21 @@ predicate bst(this: Ref) {
 
 }
 
-// define optHeight(t) (
-//     t == null ? 0 : 1 + depth(t)
-// )
+define optHeight(t) (
+    t == null ? 0 : 1 + depth(t)
+)
 
-// define max(a,b) (
-//     (a > b ? a : b)
-// )
+define max_math(a,b) (
+    (a > b ? a : b)
+)
 
-// function depth(this: Ref): Int
-//     requires this != null ==> bst(this)
-// {
-//     this == null ? -1 : 
-//     (unfolding bst(this) in max(optHeight(this.left), optHeight(this.right)))
-// }
+function depth(this: Ref): Int
+    requires this != null ==> bst(this)
+    ensures result >= 0
+{
+    this == null ? 0 : 
+    (unfolding bst(this) in max_math(optHeight(this.left), optHeight(this.right)))
+}
 
 // PART 2: BST insertion method
 //
@@ -60,8 +61,10 @@ predicate bst(this: Ref) {
 // value into the given tree.
 method bst_insert(tree: Ref, val: Int)
     requires bst(tree)
+    requires acc(time_credit(), (depth(tree)+1)/1)
     ensures bst(tree)
 {
+    consume_time_credit()
     unfold bst(tree)
     
     if (tree == null){
@@ -111,7 +114,6 @@ method bst_insert(tree: Ref, val: Int)
     }
 
     fold bst(tree)
-
 }
 
 
