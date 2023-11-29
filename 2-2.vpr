@@ -17,26 +17,13 @@ field value: Int
 field min: Int
 field max: Int
 
-function maxVal(this: Ref): Int 
-    requires bst(this)
-{
-    unfolding bst(this) in this.right == null ? this.value : maxVal(this.right)
-}
-
-
-function minVal(this: Ref): Int 
-    requires bst(this)
-{
-    unfolding bst(this) in this.left == null ? this.value : minVal(this.left)
-}
-
 predicate bst(this: Ref) {
     acc(this.left) && acc(this.right) && acc(this.value) && acc(this.max) && acc(this.min) &&
-    (this.right != null ==> bst(this.right) && this.max == (maxVal(this.right))) && 
-    (this.left != null ==> bst(this.left) && this.min == (minVal(this.left))) &&
+    (this.right != null ==> bst(this.right) && (unfolding bst(this.right) in this.max == this.right.max) && (unfolding bst(this.right) in this.value < this.right.value) ) && 
+    (this.left != null ==> bst(this.left) && (unfolding bst(this.left) in this.min == this.left.min) && (unfolding bst(this.left) in this.value > this.left.value)) &&
     (this.right == null ==> this.max == this.value) &&
-    (this.left == null ==> this.min == this.value)
-
+    (this.left == null ==> this.min == this.value) &&
+    this.value >= this.min && this.value <= this.max
 }
 
 define optHeight(t) (
@@ -55,6 +42,24 @@ function depth(this: Ref): Int
     (unfolding bst(this) in max_math(optHeight(this.left), optHeight(this.right)))
 }
 
+function get_max(this: Ref): Int
+    requires bst(this)
+{
+    (unfolding bst(this) in this.max)
+}
+
+function get_min(this: Ref): Int
+    requires bst(this)
+{
+    (unfolding bst(this) in this.min)
+}
+
+function get_value(this: Ref): Int
+    requires bst(this)
+{
+    (unfolding bst(this) in this.value)
+}
+
 // PART 2: BST insertion method
 //
 // Use the bst predicate you defined to implement a method which inserts a
@@ -63,6 +68,9 @@ method bst_insert(tree: Ref, val: Int)
     requires bst(tree)
     requires acc(time_credit(), (depth(tree)+1)/1)
     ensures bst(tree)
+    ensures get_max(tree) >= old(get_max(tree))
+    ensures get_min(tree) <= old(get_min(tree))
+    ensures get_value(tree) == old(get_value(tree))
 {
     consume_time_credit()
     unfold bst(tree)
@@ -76,7 +84,7 @@ method bst_insert(tree: Ref, val: Int)
         if (val > tree.value){
             if (tree.right != null){
                 bst_insert(tree.right, val)
-                tree.max := maxVal(tree.right)
+                tree.max := unfolding bst(tree.right) in tree.right.max
             }
             else{
                 var new_tree : Ref := new(*)
@@ -95,7 +103,7 @@ method bst_insert(tree: Ref, val: Int)
         else{
             if (tree.left != null){
                 bst_insert(tree.left, val)
-                tree.min := minVal(tree.left)
+                tree.min := unfolding bst(tree.left) in tree.left.min
             }
             else{
                 var new_tree : Ref := new(*)
