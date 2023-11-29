@@ -1,0 +1,132 @@
+predicate time_credit()
+method consume_time_credit()
+    requires time_credit()
+
+// PART 1: Binary search tree predicate
+//
+// Define a predicate for a binary search tree. You may define new fields and
+// additional predicates. You may add arguments or heap-based functions for
+// abstraction.
+// predicate bst(...) {
+//     ...
+// }
+
+field left: Ref
+field right: Ref
+field parent: Ref
+field data: Int
+field mark: Bool
+field turn: Int
+
+
+function size(this: Ref, root: Ref, nodes: Set[Ref]) : Int 
+requires bst(this, root, nodes)
+ensures result >= 0
+{
+    this == null ? 0 : unfolding bst(this, root, nodes) in (1 + size(this.right, root, nodes) + size(this.left, root, nodes))
+}
+
+
+predicate bst(this: Ref, original_root: Ref, nodes: Set[Ref]) {
+    (this != null) ==> (
+        acc(this.left) && acc(this.right) && acc(this.data)  && acc(this.parent) && acc(this.mark) &&
+        this in nodes &&
+        
+        ((this.parent == null) ==> (this == original_root)) &&
+
+        (((this != original_root) || (this.parent == null)) ==> (
+        (bst(this.parent, original_root, nodes)) &&
+        (bst(this.right, original_root, nodes)) && 
+        (bst(this.left, original_root, nodes)) &&
+        ((this.right == null ==> this.left == null) &&
+        (this.left == null ==> this.right == null))) &&
+        this.left in nodes && this.right in nodes && this.parent in nodes
+        ) &&
+
+        (((this == original_root) && (this.parent != null)) ==> (
+        (bst(this.parent, original_root, nodes)) &&
+        (bst(this.right, original_root, nodes)) && 
+        (bst(this.left, original_root, nodes)) &&
+        this.left in nodes && this.right in nodes && this.parent in nodes
+        )
+        // ((this.right == null ==> this.left == null) &&
+        // (this.left == null ==> this.right == null)))
+        )
+    ) &&
+    ((this == null) ==> (nodes == Set[Ref]()))
+}
+
+
+function add_nodes(new_nodes: Set[Ref], node: Ref, root: Ref, nodes: Set[Ref]) : Set[Ref]
+requires bst(node, root, nodes)
+requires node != null
+requires unfolding bst(node, root, nodes) in node.mark == true
+{
+    new_nodes union Set(node)
+}
+
+// TODO: formalize and prove properties, or explain why they are hard to prove.
+method markTree(root: Ref, nodes: Set[Ref])
+    requires bst(root, root, nodes) && root != null
+    requires |nodes| == size(root, root, nodes)
+    ensures root in nodes
+    ensures bst(root, root, nodes)
+{
+    unfold bst(root, root, nodes)
+
+    var x: Ref
+    var y: Ref
+    var z: Ref
+    x := root
+
+    // this is a do-while loop; we have extracted the first iteration
+    x.mark := true
+    if (x.left == null && x.right == null) {
+        y := x.parent
+        unfold bst(y, root, nodes)
+    }else{
+        y := x.left
+        unfold bst(y, root, nodes)
+
+        x.left := x.right
+        x.right := x.parent
+        x.parent := y
+    }
+
+    z := x
+    x := y
+
+
+    fold bst(x, root, nodes)
+    fold bst(z, root, nodes)
+
+
+    while (x != null)
+    invariant bst(z, root, nodes)
+    invariant (x != null) ==> x in nodes
+    invariant z!=null
+    invariant ( x!=null)==> (unfolding bst(z, root, nodes) in z.parent == x)
+    invariant (x == null) ==> z == root
+    {
+        unfold bst(z, root, nodes)
+        unfold bst(x, root, nodes)
+        x.mark := true
+
+        if (x.left == null && x.right == null) {
+            y := x.parent
+            unfold bst(y, root, nodes)
+        }else{
+            y := x.left
+            unfold bst(y, root, nodes)
+            x.left := x.right
+            x.right := x.parent
+            x.parent := y
+        }
+
+        z := x
+        x := y
+
+        fold bst(x, root, nodes)
+        fold bst(z, root, nodes)
+    }
+}
