@@ -1,6 +1,3 @@
-predicate time_credit()
-method consume_time_credit()
-    requires time_credit()
 
 function array_offset(base: Ref, idx: Int): Ref
 
@@ -44,27 +41,6 @@ define alloc(a, l) {
     inhale array(a) && len(a) == l
 }
 
-
-function get_content_dyn_arr(this: Ref): Seq[Int]
-    requires dyn_array(this)
-    // ensures unfolding dyn_array(this) in |result| == this.length
-    // ensures unfolding dyn_array(this) in forall i:Int :: 0 <= i && i < this.length ==> get_content(this.content, 0, this.length)[i] == lookup(this.content, i)
-{
-    unfolding dyn_array(this) in get_content(this.content, 0, this.length)
-}
-
-function get_content(this: Array, i: Int, size: Int): Seq[Int]
-    requires array(this)
-    requires size <= len(this)
-    requires i >= 0
-    requires i <= size
-    requires |Seq[Int]()| == 0
-    ensures (i <= size) ==> (|result| == size - i)
-{
-    (i >= size ? Seq[Int]() : Seq(lookup(this, i)) ++ get_content(this, i+1, size))
-}
-
-
 field content: Array
 field capacity: Int
 field length: Int
@@ -72,13 +48,12 @@ field length: Int
 //
 // Define a predicate for a dynamic array. You may define new fields. You may
 // add arguments or heap-based functions for abstraction.
-predicate dyn_array(this: Ref) {
+predicate dyn_array(this: Ref, ghost_content: Seq[Int]) {
     acc(this.content) && acc(this.capacity) && acc(this.length) && 
     array(this.content) && len(this.content) == this.capacity &&
     this.length >= 0 && this.length <= this.capacity &&
-    this.capacity > 0 && this.length <= len(this.content) 
-    // 0 < |get_content(this.content, 0, this.length)| && |get_content(this.content, 0, this.length)| == this.length && 
-    // forall i:Int :: 0 <= i && i < this.length ==> get_content(this.content, 0, this.length)[i] == lookup(this.content, i) 
+    this.capacity > 0 && this.length <= len(this.content) &&
+    |ghost_content| == this.length && (forall i: Int :: 0 <= i && i < this.length ==> lookup(this.content, i) == ghost_content[i])
 }
 
 // PART 2: "Simple" append method
@@ -86,24 +61,17 @@ predicate dyn_array(this: Ref) {
 // Use the dyn_array predicate you defined to implement a method which appends
 // the given value at the end of the dynamic array, assuming the capacity is
 // sufficient as a precondition.
-method append_nogrow(arr: Ref, val: Int)
-    requires dyn_array(arr)
-    requires unfolding dyn_array(arr) in arr.length < arr.capacity
-    requires acc(time_credit(), 1/1)
-    // requires unfolding dyn_array(arr) in forall i:Int :: 0 <= i && i < arr.length ==> get_content(arr.content, 0, arr.length)[i] == lookup(arr.content, i) 
-    ensures dyn_array(arr)
-    ensures unfolding dyn_array(arr) in arr.length <= arr.capacity
-    ensures old(get_capacity(arr)) == get_capacity(arr)
-    ensures |get_content_dyn_arr(arr)|== |old(get_content_dyn_arr(arr))|+1
-    ensures unfolding dyn_array(arr) in lookup(arr.content, arr.length-1) == val
+method append_nogrow(arr: Ref, val: Int, ghost_content: Seq[Int])
+    requires dyn_array(arr, ghost_content)
+    requires unfolding dyn_array(arr, ghost_content) in arr.length < arr.capacity
+    ensures dyn_array(arr, ghost_content ++ Seq(val))
 {
-    consume_time_credit()
-    unfold dyn_array(arr)
+    unfold dyn_array(arr, ghost_content)
 
     update(arr.content, arr.length, val)
     arr.length := arr.length + 1
 
-    fold dyn_array(arr)
+    fold dyn_array(arr, ghost_content ++ Seq(val))
 }
 
 // PART 3: Resize method
@@ -112,40 +80,53 @@ method append_nogrow(arr: Ref, val: Int)
 // reallocates the given dynamic array, doubling its capacity and copying over
 // its original contents.
 
-function get_capacity(arr: Ref): Int 
-requires dyn_array(arr)
+function get_capacity(arr: Ref, ghost_content: Seq[Int]): Int 
+requires dyn_array(arr, ghost_content)
 {
-    unfolding dyn_array(arr) in arr.capacity
+    unfolding dyn_array(arr, ghost_content) in arr.capacity
 }
-function get_length(arr: Ref): Int 
-requires dyn_array(arr)
+function get_length(arr: Ref, ghost_content: Seq[Int]): Int 
+requires dyn_array(arr, ghost_content)
 {
-    unfolding dyn_array(arr) in arr.length
+    unfolding dyn_array(arr, ghost_content) in arr.length
 }
 
 
 
-method grow(arr: Ref)
+method grow(arr: Ref, ghost_content: Seq[Int])
     returns (new_arr: Ref)
-    requires dyn_array(arr)
-    requires acc(time_credit(), 1/1)
-    ensures dyn_array(new_arr)
-    ensures old(get_capacity(arr))*2 == get_capacity(new_arr)
-    ensures old(get_length(arr)) == get_length(new_arr)
-    ensures |old(get_content_dyn_arr(arr))| == |get_content_dyn_arr(new_arr)|
-
+    requires dyn_array(arr, ghost_content)
+    requires unfolding dyn_array(arr, ghost_content) in arr.length == len(arr.content)
+    ensures dyn_array(new_arr, ghost_content)
+    ensures get_capacity(new_arr, ghost_content) == old(get_capacity(arr, ghost_content))*2
 {
-    consume_time_credit()
-    unfold dyn_array(arr)
+    unfold dyn_array(arr, ghost_content)
 
     var new_arr_content : Array 
     alloc(new_arr_content, 2*len(arr.content))
-    inhale forall i:Int :: 0 <= i && i < len(arr.content) ==> loc(new_arr_content,i).value == loc(arr.content,i).value
+    
+    inhale array(new_arr_content)
+    
+    var index:Int := 0
+    while (index < len(arr.content))
+        invariant acc(arr.length)
+        invariant acc(arr.content)
+        invariant array(arr.content)
+        invariant array(new_arr_content)
+        invariant arr.length == len(arr.content)
+        invariant 0 <= index <= arr.length
+        invariant len(new_arr_content) == 2*len(arr.content)
+    {
+        var elem : Int
+        elem := lookup(arr.content, index)
+        update(new_arr_content, index, elem) 
+        index := index + 1
+    }
 
     arr.content := new_arr_content
     arr.capacity := len(new_arr_content)
 
-    fold dyn_array(arr)
+    fold dyn_array(arr, ghost_content)
     new_arr := arr
 }
 
@@ -153,29 +134,23 @@ method grow(arr: Ref)
 //
 // Using the previous two methods, implement a method which will append a value
 // to the given dynamic array, resizing it first if necessary.
-method append(arr: Ref, val: Int)
+method append(arr: Ref, val: Int, ghost_content: Seq[Int])
     returns (new_arr: Ref)
-    requires dyn_array(arr)
-    requires acc(time_credit(), 3/1)
-    ensures dyn_array(new_arr)
+    requires dyn_array(arr, ghost_content)
+    ensures dyn_array(new_arr, ghost_content ++ Seq(val))
 {
-    consume_time_credit()
-    unfold dyn_array(arr)
+    unfold dyn_array(arr, ghost_content)
 
     if (arr.length == arr.capacity){
-        fold dyn_array(arr)
-        new_arr := grow(arr)
+        fold dyn_array(arr, ghost_content)
+        new_arr := grow(arr, ghost_content)
 
-        append_nogrow(new_arr, val)
+        append_nogrow(new_arr, val, ghost_content)
     }
     else{
-        fold dyn_array(arr)
+        fold dyn_array(arr, ghost_content)
         new_arr := arr
-        append_nogrow(new_arr, val)
+        append_nogrow(new_arr, val, ghost_content)
     }
 
 }
-
-// PART 5: Amortised time analysis
-//
-// Using stored time credits, prove that `append` runs in constant time.
