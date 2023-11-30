@@ -1,12 +1,11 @@
+// We prove every part of this challenge
 
+// We did not use this function by mistake at first
+// But this fucntion provides the same functionality as loc function we used
 function array_offset(base: Ref, idx: Int): Ref
 
 
-
-/* 
- * Encoding of integer arrays 
- * can be used in other Viper files in the same directory via import "ArrayPrelude.vpr"
- */
+// Array
 field value: Int // for integer arrays
 domain Array {
     function loc(a: Array, i: Int): Ref
@@ -41,9 +40,10 @@ define alloc(a, l) {
     inhale array(a) && len(a) == l
 }
 
-field content: Array
-field capacity: Int
-field length: Int
+field content: Array // we hold an array inside the dynamic array
+field capacity: Int // this field is the max size of array at the moment
+field length: Int // this field is the current size of array at the moment
+
 // PART 1: Dynamic array predicate
 //
 // Define a predicate for a dynamic array. You may define new fields. You may
@@ -80,6 +80,7 @@ method append_nogrow(arr: Ref, val: Int, ghost_content: Seq[Int])
 // reallocates the given dynamic array, doubling its capacity and copying over
 // its original contents.
 
+
 function get_capacity(arr: Ref, ghost_content: Seq[Int]): Int 
 requires dyn_array(arr, ghost_content)
 {
@@ -91,8 +92,7 @@ requires dyn_array(arr, ghost_content)
     unfolding dyn_array(arr, ghost_content) in arr.length
 }
 
-
-
+// We ensure the capacity of the new array is double the capacity of the old array
 method grow(arr: Ref, ghost_content: Seq[Int])
     returns (new_arr: Ref)
     requires dyn_array(arr, ghost_content)
@@ -130,6 +130,7 @@ method grow(arr: Ref, ghost_content: Seq[Int])
     new_arr := arr
 }
 
+// We ensure the that the value has been appended to the array
 // PART 4: "Full" append method
 //
 // Using the previous two methods, implement a method which will append a value
@@ -152,5 +153,4 @@ method append(arr: Ref, val: Int, ghost_content: Seq[Int])
         new_arr := arr
         append_nogrow(new_arr, val, ghost_content)
     }
-
 }
