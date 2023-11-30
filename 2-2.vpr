@@ -19,8 +19,8 @@ field max: Int
 
 predicate bst(this: Ref) {
     acc(this.left) && acc(this.right) && acc(this.value) && acc(this.max) && acc(this.min) &&
-    (this.right != null ==> bst(this.right) && (unfolding bst(this.right) in this.max == this.right.max) && (unfolding bst(this.right) in this.value < this.right.value) ) && 
-    (this.left != null ==> bst(this.left) && (unfolding bst(this.left) in this.min == this.left.min) && (unfolding bst(this.left) in this.value > this.left.value)) &&
+    (this.right != null ==> bst(this.right) && (unfolding bst(this.right) in this.max == this.right.max) && (unfolding bst(this.right) in this.value <= this.right.value) ) && 
+    (this.left != null ==> bst(this.left) && (unfolding bst(this.left) in this.min == this.left.min) && (unfolding bst(this.left) in this.value >= this.left.value)) &&
     (this.right == null ==> this.max == this.value) &&
     (this.left == null ==> this.min == this.value) &&
     this.value >= this.min && this.value <= this.max
@@ -85,6 +85,7 @@ method bst_insert(tree: Ref, val: Int)
             if (tree.right != null){
                 bst_insert(tree.right, val)
                 tree.max := unfolding bst(tree.right) in tree.right.max
+                fold bst(tree)
             }
             else{
                 var new_tree : Ref := new(*)
@@ -98,14 +99,17 @@ method bst_insert(tree: Ref, val: Int)
 
                 tree.right := new_tree
                 tree.max := val
+                fold bst(tree)
             }
         }
         else{
             if (tree.left != null){
                 bst_insert(tree.left, val)
                 tree.min := unfolding bst(tree.left) in tree.left.min
+                fold bst(tree)
             }
             else{
+                assert val <= tree.value
                 var new_tree : Ref := new(*)
                 new_tree.value := val
                 new_tree.left := null
@@ -117,11 +121,12 @@ method bst_insert(tree: Ref, val: Int)
 
                 tree.left := new_tree
                 tree.min := val
+                fold bst(tree)
             }
         }
     }
 
-    fold bst(tree)
+    // fold bst(tree)
 }
 
 
