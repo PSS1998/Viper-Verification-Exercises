@@ -3,7 +3,7 @@
 field cb_contents: Ref
 field head: Int
 field tail: Int
-field ghost_content2: Seq[Int]
+field ghost_content: Seq[Int]
 
 // Array API (Provided)
 predicate array(self: Ref)
@@ -21,89 +21,93 @@ method array_write(self: Ref, idx: Int, val: Int)
         array_read(self, i) == old(array_read(self, i))
     ensures array_read(self, idx) == val
 
-
+// The head and tail values always remain within the bounds of the array size
+// We check that ghost_content is always same as the circular buffer content with two cases
+// The two cases are 1. when wrap around does not happen because index is smaller than array size
+// and 2. when wrap around happens because index in bigger than array size
 // Part 1: Circular Buffer Predicate
-predicate cb(buf: Ref, ghost_content: Seq[Int])
+predicate cb(buf: Ref)
 {
-    acc(buf.ghost_content2) &&
+    acc(buf.ghost_content) &&
     acc(buf.head) && acc(buf.tail) && acc(buf.cb_contents) && array(buf.cb_contents) && 
-    array_len(buf.cb_contents) > 0 &&
     0 <= buf.head && 
     0 <= buf.tail && 
     buf.tail < array_len(buf.cb_contents) && 
     buf.head < array_len(buf.cb_contents) &&
-    |buf.ghost_content2| == (buf.tail - buf.head) % array_len(buf.cb_contents) &&
-    |buf.ghost_content2| < array_len(buf.cb_contents) &&
-    |buf.ghost_content2| >= 0 &&
-    (forall i: Int :: (0 <= i) && (i < |buf.ghost_content2|) &&
+    |buf.ghost_content| == (buf.tail - buf.head) % array_len(buf.cb_contents) &&
+    |buf.ghost_content| < array_len(buf.cb_contents) &&
+    |buf.ghost_content| >= 0 &&
+    (forall i: Int :: (0 <= i) && (i < |buf.ghost_content|) &&
         (buf.head + i < array_len(buf.cb_contents)) ==>
-        (buf.ghost_content2[i] == array_read(buf.cb_contents, (i+buf.head)))) &&
-    (forall j: Int :: (0 <= j) && (j < |buf.ghost_content2|) &&
+        (buf.ghost_content[i] == array_read(buf.cb_contents, (i+buf.head)))) &&
+    (forall j: Int :: (0 <= j) && (j < |buf.ghost_content|) &&
         (buf.head + j >= array_len(buf.cb_contents)) ==>
-        (buf.ghost_content2[j] == array_read(buf.cb_contents, buf.head + j - array_len(buf.cb_contents))))
+        (buf.ghost_content[j] == array_read(buf.cb_contents, buf.head + j - array_len(buf.cb_contents))))
 }
+
+//auxiliary functions
 
 function math_reverse(sequence: Seq[Int]): Seq[Int] 
 {
     sequence == Seq[Int]() ? Seq[Int]() : math_reverse(sequence[1..])++Seq(sequence[0])
 }
 
-function cb_empty(buf: Ref, ghost_content: Seq[Int]): Bool 
-    requires cb(buf, ghost_content)
+function cb_empty(buf: Ref): Bool 
+    requires cb(buf)
 {
-    unfolding cb(buf, ghost_content) in buf.tail != buf.head ? false : true
+    unfolding cb(buf) in buf.tail != buf.head ? false : true
 }
 
-function cb_has_room(buf: Ref, ghost_content: Seq[Int]): Bool 
-    requires cb(buf, ghost_content)
+function cb_has_room(buf: Ref): Bool 
+    requires cb(buf)
 {
-    unfolding cb(buf, ghost_content) in ((buf.tail - buf.head) % array_len(buf.cb_contents)) < array_len(buf.cb_contents) - 1
+    unfolding cb(buf) in ((buf.tail - buf.head) % array_len(buf.cb_contents)) < array_len(buf.cb_contents) - 1
 }
 
-function cb_length(buf: Ref, ghost_content: Seq[Int]): Int
-    requires cb(buf, ghost_content)
+function cb_length(buf: Ref): Int
+    requires cb(buf)
 {
-    unfolding cb(buf, ghost_content) in (buf.tail - buf.head) % array_len(buf.cb_contents)
+    unfolding cb(buf) in (buf.tail - buf.head) % array_len(buf.cb_contents)
 }
 
-function get_ghost_content(buf: Ref, ghost_content: Seq[Int]): Seq[Int]
-    requires cb(buf, ghost_content)
+function get_ghost_content(buf: Ref): Seq[Int]
+    requires cb(buf)
 {
-    unfolding cb(buf, ghost_content) in buf.ghost_content2
+    unfolding cb(buf) in buf.ghost_content
 }
 
+// We prove the resulting content is the correct elemnt read from circular buffer
 // Part 2.1: Read Method
-method cb_read(buf: Ref, ghost_content: Seq[Int]) returns (res: Int)
-    requires cb(buf, ghost_content)
-    requires unfolding cb(buf, ghost_content) in buf.tail != buf.head
-    requires unfolding cb(buf, ghost_content) in |buf.ghost_content2| > 0
-    ensures res == old(get_ghost_content(buf, ghost_content)[0])
-    ensures cb(buf, ghost_content)
-    // ensures cb_length(buf, ghost_content) == old(cb_length(buf, ghost_content)) - 1
+method cb_read(buf: Ref) returns (res: Int)
+    requires cb(buf)
+    requires unfolding cb(buf) in buf.tail != buf.head
+    requires unfolding cb(buf) in |buf.ghost_content| > 0
+    ensures res == old(get_ghost_content(buf)[0])
+    ensures cb(buf)
 {
-    unfold cb(buf, ghost_content)
+    unfold cb(buf)
     res := array_read(buf.cb_contents, (buf.head))
     buf.head := ((buf.head + 1) < array_len(buf.cb_contents)) ? (buf.head + 1) : 0
-    buf.ghost_content2 := buf.ghost_content2[1..]
-    fold cb(buf, ghost_content)
+
+    buf.ghost_content := buf.ghost_content[1..]
+    
+    fold cb(buf)
 }
 
 // Part 2.2: Write Method
-method cb_write(buf: Ref, val: Int, ghost_content: Seq[Int])
-    requires cb(buf, ghost_content)
-    requires unfolding cb(buf, ghost_content) in ((buf.tail - buf.head) % array_len(buf.cb_contents)) < array_len(buf.cb_contents) - 1
-    requires unfolding cb(buf, ghost_content) in |buf.ghost_content2| < array_len(buf.cb_contents) - 1
-    // ensures cb_length(buf, ghost_content) == old(cb_length(buf, ghost_content)) + 1
-    ensures cb(buf, ghost_content)    
+method cb_write(buf: Ref, val: Int)
+    requires cb(buf)
+    requires unfolding cb(buf) in ((buf.tail - buf.head) % array_len(buf.cb_contents)) < array_len(buf.cb_contents) - 1
+    requires unfolding cb(buf) in |buf.ghost_content| < array_len(buf.cb_contents) - 1
+    ensures cb(buf)    
 {
-    unfold cb(buf, ghost_content)
+    unfold cb(buf)
     array_write(buf.cb_contents, buf.tail, val)
-
     buf.tail := ((buf.tail + 1) < array_len(buf.cb_contents)) ? (buf.tail + 1) : 0
 
-    buf.ghost_content2 := buf.ghost_content2 ++ Seq(val)
+    buf.ghost_content := buf.ghost_content ++ Seq(val)
 
-    fold cb(buf, ghost_content)
+    fold cb(buf)
 }
 
 field next: Ref
@@ -142,52 +146,50 @@ method head_list(this: Ref) returns (res: Int)
     fold list(this)
 }
 
-// function get_reverse_content(buf: Ref, ghost_content: Seq[Int]): Seq[Int]
-//     requires cb(buf, ghost_content)
-// {
-//     unfolding cb(buf, ghost_content) in reverse_content(buf.cb_contents, (buf.head + 1) % array_len(buf.cb_contents), buf.head)
-// }
 
+// For part we could not prove that the content will be reversed in the end
+// We just proved memory safety and that at the end the buffer is still a circular buffer
+// The commented parts are our attempt to prove that the content is reversed but was not successful
 // Part 4: Method to reverse Circular Buffer
-method cb_reverse(buf: Ref, ghost_content: Seq[Int], rev_content: Seq[Int])
-    requires cb(buf, ghost_content)
-    ensures cb(buf, ghost_content)
-    // ensures get_ghost_content(buf, ghost_content) == old(math_reverse(get_ghost_content(buf, ghost_content)))
+method cb_reverse(buf: Ref, rev_content: Seq[Int])
+    requires cb(buf)
+    ensures cb(buf)
+    // ensures get_ghost_content(buf) == old(math_reverse(get_ghost_content(buf)))
 {
     var e: Int
     var linked_list: Ref
     
     linked_list := create_list()
 
-    var array_length: Int := cb_length(buf, ghost_content)
+    var array_length: Int := cb_length(buf)
 
-    var index: Int := 0
-    while (!cb_empty(buf, ghost_content)) 
-        invariant cb(buf, ghost_content)
+    // var index: Int := 0
+    while (!cb_empty(buf)) 
+        invariant cb(buf)
         invariant list(linked_list)
-        // invariant !cb_empty(buf, ghost_content) ==> cb_length(buf, ghost_content) + index == array_length
+        // invariant !cb_empty(buf) ==> cb_length(buf) + index == array_length
     {
-        e := cb_read(buf, ghost_content)
+        e := cb_read(buf)
         linked_list := prepend_list(linked_list, e)
-        index := index + 1
+        // index := index + 1
     }
 
-    var index2: Int := 0
+    // var index2: Int := 0
     while (linked_list != null) 
-        invariant cb(buf, ghost_content)
+        invariant cb(buf)
         invariant (linked_list != null) ==> list(linked_list)
-        // invariant cb_length(buf, ghost_content) <= array_length
+        // invariant cb_length(buf) <= array_length
         // invariant index2 <= array_length
-        // invariant old(get_ghost_content(buf, ghost_content)[cb_length(buf, ghost_content) - index2]) == get_ghost_content(buf, ghost_content)[index2]
-        // invariant cb_length(buf, ghost_content) + linked_list_lenght(linked_list) == array_length
+        // invariant old(get_ghost_content(buf)[cb_length(buf) - index2]) == get_ghost_content(buf)[index2]
+        // invariant cb_length(buf) + linked_list_lenght(linked_list) == array_length
     {
         e := head_list(linked_list)
-        if (cb_has_room(buf, ghost_content)) {
-            cb_write(buf, e, ghost_content)
+        if (cb_has_room(buf)) {
+            cb_write(buf, e)
         }
         unfold list(linked_list)
         linked_list := linked_list.next
-        index2 := index2 + 1
+        // index2 := index2 + 1
     }
 
 }
