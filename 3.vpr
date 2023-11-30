@@ -1,16 +1,3 @@
-predicate time_credit()
-method consume_time_credit()
-    requires time_credit()
-
-// PART 1: Binary search tree predicate
-//
-// Define a predicate for a binary search tree. You may define new fields and
-// additional predicates. You may add arguments or heap-based functions for
-// abstraction.
-// predicate bst(...) {
-//     ...
-// }
-
 field left: Ref
 field right: Ref
 field parent: Ref
@@ -18,75 +5,87 @@ field data: Int
 field mark: Bool
 field turn: Int
 
-
+// size of the tree; number of nodes
 function size(this: Ref, root: Ref, nodes: Set[Ref]) : Int 
-requires bst(this, root, nodes)
-ensures result >= 0
+    requires bt(this, root, nodes)
+    ensures result >= 0
 {
-    this == null ? 0 : unfolding bst(this, root, nodes) in (1 + size(this.right, root, nodes) + size(this.left, root, nodes))
+    this == null ? 0 : unfolding bt(this, root, nodes) in (1 + size(this.right, root, nodes) + size(this.left, root, nodes))
 }
 
 
-predicate bst(this: Ref, original_root: Ref, nodes: Set[Ref]) {
+// Binary tree predicate
+
+// nodes is a ghost variable that holds a set of all nodes in the tree
+// it could potentially be used for verifying some of the properties
+
+predicate bt(this: Ref, original_root: Ref, nodes: Set[Ref]) {
     (this != null) ==> (
         acc(this.left) && acc(this.right) && acc(this.data)  && acc(this.parent) && acc(this.mark) &&
         this in nodes &&
-        
+
+        // the only case when parent is null is when we are at root when root has not gone through any rotation or at the end        
         ((this.parent == null) ==> (this == original_root)) &&
 
+        // checks for any node, and root with parent == null (which happens when root has not gone through any rotation or at the end)
         (((this != original_root) || (this.parent == null)) ==> (
-        (bst(this.parent, original_root, nodes)) &&
-        (bst(this.right, original_root, nodes)) && 
-        (bst(this.left, original_root, nodes)) &&
+        (bt(this.parent, original_root, nodes)) &&
+        (bt(this.right, original_root, nodes)) && 
+        (bt(this.left, original_root, nodes)) &&
         ((this.right == null ==> this.left == null) &&
         (this.left == null ==> this.right == null))) &&
         this.left in nodes && this.right in nodes && this.parent in nodes
         ) &&
 
+        // if we are at root, but parent is not null, so the root has already gone through rotation,
+        // don't check if each node has either zero or two children
         (((this == original_root) && (this.parent != null)) ==> (
-        (bst(this.parent, original_root, nodes)) &&
-        (bst(this.right, original_root, nodes)) && 
-        (bst(this.left, original_root, nodes)) &&
+        (bt(this.parent, original_root, nodes)) &&
+        (bt(this.right, original_root, nodes)) && 
+        (bt(this.left, original_root, nodes)) &&
         this.left in nodes && this.right in nodes && this.parent in nodes
         )
         // ((this.right == null ==> this.left == null) &&
         // (this.left == null ==> this.right == null)))
         )
-    ) &&
-    ((this == null) ==> (nodes == Set[Ref]()))
+    ) 
 }
 
 
-function add_nodes(new_nodes: Set[Ref], node: Ref, root: Ref, nodes: Set[Ref]) : Set[Ref]
-requires bst(node, root, nodes)
-requires node != null
-requires unfolding bst(node, root, nodes) in node.mark == true
-{
-    new_nodes union Set(node)
-}
+// Next method proves the following properties:
+// (1) The implementation is memory safe.
+// (2) The resulting data structure is again a binary tree with parent pointers.
 
-// TODO: formalize and prove properties, or explain why they are hard to prove.
+
+// The following property can be considered proved depending on the interpretation:
+// (3) The resulting tree contains the same nodes as the initial tree. 
+
+// explanation: we know that the tree contains the same nodes (since we ensure bt(root, root, nodes)), 
+// but we cannot prove that the tree size didn't change, therefore we know that 
+// every node from new tree will be in the old tree, but not (necessarily) every node from old tree will be in the new tree
+
 method markTree(root: Ref, nodes: Set[Ref])
-    requires bst(root, root, nodes) && root != null
+    requires bt(root, root, nodes) && root != null
     requires |nodes| == size(root, root, nodes)
     ensures root in nodes
-    ensures bst(root, root, nodes)
+    ensures bt(root, root, nodes)
 {
-    unfold bst(root, root, nodes)
+    unfold bt(root, root, nodes)
 
     var x: Ref
     var y: Ref
-    var z: Ref
     x := root
+
+    // declare a new variable z that will hold x of previous iteration
+    // so at the beginning z == root, and in the loop z.parent == x
+    var z: Ref
 
     // this is a do-while loop; we have extracted the first iteration
     x.mark := true
     if (x.left == null && x.right == null) {
         y := x.parent
-        unfold bst(y, root, nodes)
     }else{
         y := x.left
-        unfold bst(y, root, nodes)
 
         x.left := x.right
         x.right := x.parent
@@ -96,28 +95,26 @@ method markTree(root: Ref, nodes: Set[Ref])
     z := x
     x := y
 
-
-    fold bst(x, root, nodes)
-    fold bst(z, root, nodes)
+    // folding the parent
+    fold bt(z, root, nodes)
 
 
     while (x != null)
-    invariant bst(z, root, nodes)
-    invariant (x != null) ==> x in nodes
-    invariant z!=null
-    invariant ( x!=null)==> (unfolding bst(z, root, nodes) in z.parent == x)
-    invariant (x == null) ==> z == root
+        invariant bt(z, root, nodes)
+        invariant (x != null) ==> x in nodes
+        invariant z!=null
+        invariant ( x!=null)==> (unfolding bt(z, root, nodes) in z.parent == x)
+        invariant (x == null) ==> z == root
     {
-        unfold bst(z, root, nodes)
-        unfold bst(x, root, nodes)
+        // unfolding the parent (z) first to have access to the child (x)
+        unfold bt(z, root, nodes)
+        unfold bt(x, root, nodes)
         x.mark := true
 
         if (x.left == null && x.right == null) {
             y := x.parent
-            unfold bst(y, root, nodes)
         }else{
             y := x.left
-            unfold bst(y, root, nodes)
             x.left := x.right
             x.right := x.parent
             x.parent := y
@@ -126,7 +123,24 @@ method markTree(root: Ref, nodes: Set[Ref])
         z := x
         x := y
 
-        fold bst(x, root, nodes)
-        fold bst(z, root, nodes)
+        // folding the parent
+        fold bt(z, root, nodes)
     }
 }
+
+
+// Next properties were not verified:
+//
+// (4) The shape of the resulting tree is the same as the initial tree, i.e. every node points to the same nodes as in the original tree.
+// (5) All nodes in the resulting tree are marked.
+// (6) The implementation visits the nodes of the initial tree in-order.
+
+
+// (4): the easiest way to implement such a shape function would be by recursion, but this way it is very difficult 
+// to argue about the shape of the whole tree, since we'd only see a parent and two children nodes at once. 
+
+// (5): it is difficult to prove that all nodes are marked, since we may visit some of the nodes more than once, 
+// and the order in which we visit the tree is not easily defined.
+
+// (6): to prove this property, we'd need to implement a function that visits the nodes in-order,
+// but it was proven difficult via trial and error. 
