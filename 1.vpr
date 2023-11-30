@@ -1,4 +1,5 @@
-// Viper Code for Circular Buffer and Linked List
+// We prove the first three parts of the assignment 
+// For the last part of the assignment we dont prove the content is reversed
 
 field cb_contents: Ref
 field head: Int

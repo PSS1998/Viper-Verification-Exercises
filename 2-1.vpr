@@ -1,3 +1,5 @@
+// We prove every part of this task
+
 predicate time_credit()
 method consume_time_credit()
     requires time_credit()
