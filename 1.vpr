@@ -148,9 +148,10 @@ method head_list(this: Ref) returns (res: Int)
 }
 
 
-// For part we could not prove that the content will be reversed in the end
+// For this part we could not prove that the content will be reversed in the end
 // We just proved memory safety and that at the end the buffer is still a circular buffer
-// The commented parts are our attempt to prove that the content is reversed but was not successful
+// The commented parts are our attempt to prove that the content is reversed but it was not successful
+
 // Part 4: Method to reverse Circular Buffer
 method cb_reverse(buf: Ref, rev_content: Seq[Int])
     requires cb(buf)
