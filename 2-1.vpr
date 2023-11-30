@@ -18,6 +18,7 @@ domain IntExt {
         exp(0) == 1
     }
 
+    // Axiom for exponential
     axiom {
         forall n:Int :: n >= 0 ==> exp(n+1) == 2 * exp(n)
     }
@@ -34,10 +35,17 @@ domain IntExt {
         forall n:Int :: n >= 1 ==> log(n) >= 0
     }
 
+    // Axiom for floor of log base of 2 
     axiom {
         forall n:Int, m:Int :: n >= 1 && m == log(n) ==> exp(m) <= n && n < exp(m+1)
     }
 }
+
+// Lemma to show the property of log
+method lemma_log_decrease(y: Int)
+    requires y > 0
+    ensures log(y / 2) == log(y) - 1
+
 
 // Add time credit annotations to the following method.
 //
@@ -83,10 +91,6 @@ method lemma_pow(b: Int, y: Int)
     requires y % 2 == 0
     ensures math_pow(b, y) == math_pow(b * b, y / 2)
 
-method lemma_log_decrease(y: Int)
-    requires y > 0
-    ensures log(y / 2) == log(y) - 1
-
 // Add time credit annotations to the following method.
 //
 // Remember to insert consume_time_credit() calls according to the background
@@ -98,6 +102,7 @@ method lemma_log_decrease(y: Int)
 method fast_pow(n: Int, e: Int)
     returns (res: Int)
     requires 0 < e
+    // the first time credit is used here right at beginning of the function call
     requires acc(time_credit(), (log(e)+2)/1)
     ensures res == math_pow(n, e)
 {
@@ -115,10 +120,8 @@ method fast_pow(n: Int, e: Int)
     while (y > 0)
         invariant 0 <= y
         invariant res * math_pow(b, y) == math_pow(n, e)
+        // The order is of log because each time y is divided by 2
         invariant (y > 0) ==> acc(time_credit(), (log(y)+1)/1)
-        // invariant i <= log(e+1)
-        // invariant log(e+1) - i == log(y+1)
-        // invariant acc(time_credit(), (log(e+1)-i)/1)
     {
         consume_time_credit()
         i := i+1
