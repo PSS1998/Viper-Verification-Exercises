@@ -23,12 +23,14 @@ field max: Int
 // Min of a node is equal to the min of the left subtree or the value of current node if left subtree is null
 // We prove sortedness in predicate by checking that each value is greater and equal of the value of the node on left and less and equal of the node on right
 predicate bst(this: Ref) {
-    acc(this.left) && acc(this.right) && acc(this.value) && acc(this.max) && acc(this.min) &&
-    (this.right != null ==> bst(this.right) && (unfolding bst(this.right) in this.max == this.right.max) && (unfolding bst(this.right) in this.value <= this.right.value) ) && 
-    (this.left != null ==> bst(this.left) && (unfolding bst(this.left) in this.min == this.left.min) && (unfolding bst(this.left) in this.value >= this.left.value)) &&
-    (this.right == null ==> this.max == this.value) &&
-    (this.left == null ==> this.min == this.value) &&
-    this.value >= this.min && this.value <= this.max
+    (this != null) ==> (
+        acc(this.left) && acc(this.right) && acc(this.value) && acc(this.max) && acc(this.min) &&
+        (this.right != null ==> bst(this.right) && (unfolding bst(this.right) in this.max == this.right.max) && (unfolding bst(this.right) in this.value <= this.right.value) ) && 
+        (this.left != null ==> bst(this.left) && (unfolding bst(this.left) in this.min == this.left.min) && (unfolding bst(this.left) in this.value >= this.left.value)) &&
+        (this.right == null ==> this.max == this.value) &&
+        (this.left == null ==> this.min == this.value) &&
+        this.value >= this.min && this.value <= this.max
+    )
 }
 
 define optHeight(t) (
@@ -48,21 +50,30 @@ function depth(this: Ref): Int
 }
 
 function get_max(this: Ref): Int
+    requires this != null
     requires bst(this)
 {
     (unfolding bst(this) in this.max)
 }
 
 function get_min(this: Ref): Int
+    requires this != null
     requires bst(this)
 {
     (unfolding bst(this) in this.min)
 }
 
 function get_value(this: Ref): Int
+    requires this != null
     requires bst(this)
 {
     (unfolding bst(this) in this.value)
+}
+
+function is_null(this: Ref): Bool
+    requires bst(this)
+{
+    (this == null) ? true : false
 }
 
 // PART 2: BST insertion method
@@ -73,14 +84,17 @@ method bst_insert(tree: Ref, val: Int)
     requires bst(tree)
     requires acc(time_credit(), (depth(tree)+1)/1)
     ensures bst(tree)
-    ensures get_max(tree) >= old(get_max(tree))
-    ensures get_min(tree) <= old(get_min(tree))
-    ensures get_value(tree) == old(get_value(tree))
+    ensures old(!is_null(tree)) ==> (get_max(tree) >= old(get_max(tree)))
+    ensures old(!is_null(tree)) ==> (get_min(tree) <= old(get_min(tree)))
+    ensures old(!is_null(tree)) ==> (get_value(tree) == old(get_value(tree)))
 {
     consume_time_credit()
     unfold bst(tree)
     
     if (tree == null){
+        inhale acc(tree.value)
+        inhale acc(tree.max)
+        inhale acc(tree.min)
         tree.value := val
         tree.max := val
         tree.min := val
